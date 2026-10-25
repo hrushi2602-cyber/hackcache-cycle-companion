@@ -6,4 +6,5 @@
     <string name="custom_url_scheme">com.hackcache.cyclecuddle</string>
     <string name="widget_name">Cycle Companion</string>
     <string name="widget_description">Live phase tracking, transience comfort prompts, and quick biometric check-in.</string>
+    <string name="api_base_url">http://192.168.1.16:8000</string>
 </resources>

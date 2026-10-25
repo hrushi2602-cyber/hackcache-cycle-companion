@@ -1,3 +1,4 @@
+import os
 from datetime import date, timedelta
 from enum import Enum
 from typing import List, Dict, Optional, Tuple
@@ -8,8 +9,12 @@ from motor.motor_asyncio import AsyncIOMotorClient
 # ==========================================
 # DATABASE & MEMORY CONFIGURATION
 # ==========================================
-client = AsyncIOMotorClient("mongodb://localhost:27017")
-db = client.hackcache_db
+MONGODB_URL = os.getenv("MONGODB_URL") or os.getenv("DATABASE_URL") or "mongodb://localhost:27017"
+client = AsyncIOMotorClient(MONGODB_URL, serverSelectionTimeoutMS=2000)
+try:
+    db = client.get_default_database()
+except Exception:
+    db = client.hackcache_db
 memory_collection = db.memory_summaries
 
 class ChatRequest(BaseModel):

@@ -1,49 +1,12 @@
-import { Capacitor } from "@capacitor/core";
+import { resolveApiBase, API_TIMEOUT_MS } from "@/lib/api/config";
 
 /**
  * Central API Service Layer for HackCache Menstrual Health Gateway
- * Strictly connects to live FastAPI backend without any mock data or fake logic.
- *
- * Dynamic LAN IP Resolution:
- * Automatically resolves window.location.hostname on port 8000 when accessed
- * from mobile Wi-Fi / LAN, and targets http://192.168.1.16:8000 inside native Capacitor.
+ * Strictly connects to live FastAPI backend configured by VITE_API_URL.
  */
 
 export function getBaseUrl(): string {
-  // 1. Check dynamic environment variables VITE_API_URL and VITE_API_BASE_URL
-  const envUrl = (
-    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_API_URL"]) ||
-    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_API_BASE_URL"])
-  )?.trim();
-
-  if (envUrl) {
-    const cleaned = envUrl.replace(/\/+$/, "");
-    if (!cleaned.includes("localhost") && !cleaned.includes("127.0.0.1")) {
-      return cleaned;
-    }
-  }
-
-  // 2. Check browser / mobile environment
-  if (typeof window !== "undefined") {
-    // Inside native Capacitor mobile app, localhost points to the Android phone itself.
-    // Must route to host LAN IP running FastAPI backend.
-    if (Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()) {
-      return "http://192.168.1.16:8000";
-    }
-    // When accessed from phone browser on Wi-Fi (e.g. 192.168.1.16:8080)
-    if (
-      window.location &&
-      window.location.hostname &&
-      window.location.hostname !== "localhost" &&
-      window.location.hostname !== "127.0.0.1" &&
-      window.location.hostname !== ""
-    ) {
-      return `http://${window.location.hostname}:8000`;
-    }
-  }
-
-  // 3. Robust default fallback
-  return "http://192.168.1.16:8000";
+  return resolveApiBase();
 }
 
 export const BASE_URL = getBaseUrl();
@@ -256,13 +219,13 @@ export class ApiError extends Error {
 // CORE HTTP CLIENT (45s timeout for AI reasoning engines)
 // =============================================================================
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(endpoint: string, options: RequestInit = {}, retries = 1): Promise<T> {
   const baseUrl = getBaseUrl();
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = `${baseUrl}${cleanEndpoint}`;
   const controller = new AbortController();
-  // 45 seconds timeout to accommodate AI reasoning latency
-  const timeoutId = setTimeout(() => controller.abort(), 45000);
+  // 45 seconds timeout to accommodate free cloud tier cold starts and AI reasoning
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -311,12 +274,19 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     if (err instanceof ApiError) {
       throw err;
     }
+
+    // Auto-retry once on network drops or wake-up delays
+    if (retries > 0) {
+      await new Promise((r) => setTimeout(r, 1500));
+      return request<T>(endpoint, options, retries - 1);
+    }
+
     if ((err as Error)?.name === "AbortError") {
-      throw new ApiError(0, "AI Engine request timed out after 45 seconds. Please try again.");
+      throw new ApiError(0, "The server took too long to respond. Free cloud servers may be waking up (can take ~30-50s)—please retry.");
     }
     throw new ApiError(
       0,
-      `Network failure connecting to ${url}: ${(err as Error)?.message || "FastAPI backend unreachable on port 8000."}`,
+      `Waking up server... Could not connect to ${url}. If using free hosting, please allow ~30 seconds for initial startup.`,
     );
   }
 }

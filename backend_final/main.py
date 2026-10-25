@@ -12,10 +12,14 @@ Includes CORS middleware, strict Pydantic response models, robust 503/404 fallba
 and mock MongoDB state variables for immediate Swagger UI testing.
 """
 
+import os
+import traceback
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from enum import Enum
-import traceback
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -70,13 +74,45 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Configure Allowed CORS Origins
+raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
+default_origins = [
+    "http://localhost:5173",
+    "https://localhost",
+    "capacitor://localhost",
+    "http://localhost:8080",
+    "http://localhost:3000",
+    "http://localhost",
+]
+
+if raw_origins:
+    if raw_origins == "*":
+        allow_origins = ["*"]
+        allow_credentials = False
+    else:
+        parsed = [o.strip() for o in raw_origins.split(",") if o.strip()]
+        for d in default_origins:
+            if d not in parsed:
+                parsed.append(d)
+        allow_origins = parsed
+        allow_credentials = True
+else:
+    allow_origins = default_origins
+    allow_credentials = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allow_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Health check endpoint for cloud platform health monitors."""
+    return {"status": "ok"}
 
 
 # ==============================================================================
@@ -1019,3 +1055,9 @@ async def answer_deck_card(user_id: str, req: DeckAnswerRequest):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Failed to process card answer: {str(e)}"
         )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)

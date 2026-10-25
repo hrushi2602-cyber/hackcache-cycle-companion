@@ -68,8 +68,26 @@ public class CycleWidgetProvider extends AppWidgetProvider {
     private static final String KEY_STATUS_FEEDBACK = "deck_status_feedback";
 
     // FastAPI Backend Configuration
-    private static final String BASE_URL = "http://192.168.1.16:8000";
+    private static final String DEFAULT_BASE_URL = "http://192.168.1.16:8000";
     private static final String USER_ID = "test_user";
+
+    private static String getApiBaseUrl(Context context) {
+        try {
+            SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            String saved = prefs.getString("custom_api_base_url", null);
+            if (saved != null && !saved.trim().isEmpty()) {
+                return saved.trim();
+            }
+            int resId = context.getResources().getIdentifier("api_base_url", "string", context.getPackageName());
+            if (resId != 0) {
+                String resUrl = context.getString(resId);
+                if (resUrl != null && !resUrl.trim().isEmpty()) {
+                    return resUrl.trim();
+                }
+            }
+        } catch (Exception ignored) {}
+        return DEFAULT_BASE_URL;
+    }
 
     // Curated Uplifting Quotes for Empty Deck Sanctuary
     private static final String[][] UPLIFTING_QUOTES = {
@@ -363,8 +381,9 @@ public class CycleWidgetProvider extends AppWidgetProvider {
                     payload.put("selected_option_ids", optArr);
                     payload.put("obs_date", new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date()));
 
-                    Log.d(TAG, "Submitting answer to FastAPI: " + payload);
-                    String response = httpPost(BASE_URL + "/api/deck/" + USER_ID + "/answer", payload.toString());
+                    String baseUrl = getApiBaseUrl(context);
+                    Log.d(TAG, "Submitting answer to FastAPI: " + payload + " at " + baseUrl);
+                    String response = httpPost(baseUrl + "/api/deck/" + USER_ID + "/answer", payload.toString());
                     Log.d(TAG, "Backend answer response: " + response);
 
                     String dietText = "🍵 Warm chamomile or ginger tea relaxes pelvic muscle contractions.";
@@ -488,8 +507,9 @@ public class CycleWidgetProvider extends AppWidgetProvider {
     private static void fetchDeckData(Context context) {
         new Thread(() -> {
             try {
-                Log.d(TAG, "Fetching live deck questions from " + BASE_URL + "/api/deck/" + USER_ID);
-                String deckResponse = httpGet(BASE_URL + "/api/deck/" + USER_ID);
+                String baseUrl = getApiBaseUrl(context);
+                Log.d(TAG, "Fetching live deck questions from " + baseUrl + "/api/deck/" + USER_ID);
+                String deckResponse = httpGet(baseUrl + "/api/deck/" + USER_ID);
 
                 String phaseFormatted = null;
                 String cardsJson = null;

@@ -76,13 +76,14 @@ app = FastAPI(
 
 # Configure Allowed CORS Origins
 raw_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
-default_origins = [
-    "http://localhost:5173",
+mandatory_origins = [
     "https://localhost",
+    "http://localhost",
     "capacitor://localhost",
+    "http://localhost:5173",
+    "http://localhost:4173",
     "http://localhost:8080",
     "http://localhost:3000",
-    "http://localhost",
 ]
 
 if raw_origins:
@@ -91,13 +92,13 @@ if raw_origins:
         allow_credentials = False
     else:
         parsed = [o.strip() for o in raw_origins.split(",") if o.strip()]
-        for d in default_origins:
-            if d not in parsed:
-                parsed.append(d)
+        for m in mandatory_origins:
+            if m not in parsed:
+                parsed.append(m)
         allow_origins = parsed
         allow_credentials = True
 else:
-    allow_origins = default_origins
+    allow_origins = mandatory_origins
     allow_credentials = True
 
 app.add_middleware(
